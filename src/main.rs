@@ -1,8 +1,7 @@
 use std::net::TcpListener;
 
-use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use zero2prod::{configuration::get_configuration, startup::run, telemetry::{get_subscriber, init_subscriber}};
-use secrecy::ExposeSecret;
 
 
 
@@ -19,11 +18,15 @@ async fn main() -> Result<(), std::io::Error> {
 
 
     let configuration = get_configuration().expect("Failed to read configuration.");
-    let connection_pool = PgPool::connect_lazy(&configuration.database.connection_string().expose_secret())
-        .expect("Failed to connect to Postgres.");
+    let connection_pool = PgPoolOptions::new()
+        // `connect_lazy_with` instead of `connect_lazy`
+        .connect_lazy_with(configuration.database.with_db());
 
-    let address = format!("127.0.0.1:{}", configuration.application_port);
-    let listener = TcpListener::bind(address)?;
+        let address = format!(
+            "{}:{}",
+            configuration.application.host, configuration.application.port
+        );
+        let listener = TcpListener::bind(address)?;
 
     let port: u16 = listener.local_addr().unwrap().port();
     println!("启动地址: http://127.0.0.1:{port}");

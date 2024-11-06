@@ -1,6 +1,5 @@
 use std::net::TcpListener;
 
-use secrecy::ExposeSecret;
 use once_cell::sync::Lazy;
 use sqlx::{Connection, PgConnection, PgPool, Executor};
 use uuid::Uuid;
@@ -142,11 +141,9 @@ async fn spawn_app() -> TestApp {
 
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
-    let mut connection = PgConnection::connect(
-        &config.connection_string_without_db().expose_secret()
-    )
-    .await
-    .expect("Failed to connect to Postgres");
+    let mut connection = PgConnection::connect_with(&config.without_db())
+        .await
+        .expect("Failed to connect to Postgres");
 
     connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
@@ -154,13 +151,10 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to create database.");
 
     // Migrate database
-    let connection_pool = PgPool::connect(
-        &config.connection_string().expose_secret()
-    )
-    .await
-    .expect("Failed to connect to Postgres.");
-
-    sqlx::migrate!(".\\migrations")
+    let connection_pool = PgPool::connect_with(config.with_db())
+        .await
+        .expect("Failed to connect to Postgres.");
+    sqlx::migrate!("./migrations")
         .run(&connection_pool)
         .await
         .expect("Failed to migrate the database");
